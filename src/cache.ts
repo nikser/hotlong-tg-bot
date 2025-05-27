@@ -7,66 +7,137 @@ interface CacheData<T> {
 }
 
 export class FileCache<T> {
-  private readonly cacheFile: string;
-  private readonly ttlMs: number;
+  private filePath: string;
+  private ttlHours: number;
+  private cacheDir: string;
 
-  constructor(filename: string, ttlHours: number = 1) {
-    // Create cache directory if it doesn't exist
-    const cacheDir = path.join(process.cwd(), 'cache');
-    if (!fs.existsSync(cacheDir)) {
-      fs.mkdirSync(cacheDir);
-    }
-
-    this.cacheFile = path.join(cacheDir, filename);
-    this.ttlMs = ttlHours * 60 * 60 * 1000; // Convert hours to milliseconds
+  constructor(fileName: string, ttlHours: number) {
+    this.cacheDir = path.join(process.cwd(), 'cache');
+    this.filePath = path.join(this.cacheDir, fileName);
+    this.ttlHours = ttlHours;
+    this.ensureCacheDir();
   }
 
-  public save(data: T): void {
-    const cacheData: CacheData<T> = {
-      timestamp: Date.now(),
-      data
-    };
-
-    try {
-      fs.writeFileSync(this.cacheFile, JSON.stringify(cacheData), 'utf8');
-      console.log(`Cache saved to ${this.cacheFile}`);
-    } catch (error) {
-      console.error('Error saving cache:', error);
+  private ensureCacheDir() {
+    if (!fs.existsSync(this.cacheDir)) {
+      fs.mkdirSync(this.cacheDir, { recursive: true });
     }
   }
 
-  public load(): T | null {
+  load(): T | null {
     try {
-      if (!fs.existsSync(this.cacheFile)) {
+      if (!fs.existsSync(this.filePath)) {
         return null;
       }
 
-      const fileContent = fs.readFileSync(this.cacheFile, 'utf8');
-      const cacheData: CacheData<T> = JSON.parse(fileContent);
+      const stats = fs.statSync(this.filePath);
+      const ageHours = (Date.now() - stats.mtimeMs) / (1000 * 60 * 60);
 
-      // Check if cache is expired
-      if (Date.now() - cacheData.timestamp > this.ttlMs) {
-        console.log('Cache expired, deleting file...');
-        fs.unlinkSync(this.cacheFile);
+      if (ageHours > this.ttlHours) {
+        this.clear();
         return null;
       }
 
-      console.log(`Cache loaded from ${this.cacheFile}`);
-      return cacheData.data;
+      const data = fs.readFileSync(this.filePath, 'utf8');
+      return JSON.parse(data);
     } catch (error) {
       console.error('Error loading cache:', error);
       return null;
     }
   }
 
-  public clear(): void {
+  save(data: T): void {
     try {
-      if (fs.existsSync(this.cacheFile)) {
-        fs.unlinkSync(this.cacheFile);
-        console.log(`Cache cleared: ${this.cacheFile}`);
+      fs.writeFileSync(this.filePath, JSON.stringify(data, null, 2));
+    } catch (error) {
+      console.error('Error saving cache:', error);
+    }
+  }
+
+  clear(): void {
+    try {
+      if (fs.existsSync(this.filePath)) {
+        fs.unlinkSync(this.filePath);
       }
     } catch (error) {
       console.error('Error clearing cache:', error);
+    }
+  }
+}
+
+export class TrassaCache {
+  private cacheDir: string;
+  private ttlHours: number;
+
+  constructor(ttlHours: number = 24) {
+    this.cacheDir = path.join(process.cwd(), 'cache', 'trassa');
+    this.ttlHours = ttlHours;
+    this.ensureCacheDir();
+  }
+
+  private ensureCacheDir() {
+    if (!fs.existsSync(this.cacheDir)) {
+      fs.mkdirSync(this.cacheDir, { recursive: true });
+    }
+  }
+
+  private getFilePath(routeId: string): string {
+    return path.join(this.cacheDir, `trassa_${routeId}.json`);
+  }
+
+  load(routeId: string, direction: number): any | null {
+    const filePath = this.getFilePath(routeId);
+    try {
+      if (!fs.existsSync(filePath)) {
+        return null;
+      }
+
+      const stats = fs.statSync(filePath);
+      const ageHours = (Date.now() - stats.mtimeMs) / (1000 * 60 * 60);
+
+      if (ageHours > this.ttlHours) {
+        this.clear(routeId, direction);
+        return null;
+      }
+
+      const data = fs.readFileSync(filePath, 'utf8');
+      return JSON.parse(data);
+    } catch (error) {
+      console.error(`Error loading trassa cache for route ${routeId}:`, error);
+      return null;
+    }
+  }
+
+  save(routeId: string, direction: number, data: any): void {
+    const filePath = this.getFilePath(routeId);
+    try {
+      fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+    } catch (error) {
+      console.error(`Error saving trassa cache for route ${routeId}:`, error);
+    }
+  }
+
+  clear(routeId: string, direction: number): void {
+    const filePath = this.getFilePath(routeId);
+    try {
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+    } catch (error) {
+      console.error(`Error clearing trassa cache for route ${routeId}:`, error);
+    }
+  }
+
+  clearAll(): void {
+    try {
+      if (fs.existsSync(this.cacheDir)) {
+        const files = fs.readdirSync(this.cacheDir);
+        for (const file of files) {
+          fs.unlinkSync(path.join(this.cacheDir, file));
+        }
+      }
+    } catch (error) {
+      console.error('Error clearing all trassa caches:', error);
     }
   }
 } 

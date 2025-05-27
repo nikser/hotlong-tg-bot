@@ -1,22 +1,23 @@
 {
-  "name": "nsk-transport-bot",
+  "name": "howlongbot",
   "version": "1.0.0",
-  "description": "Telegram bot for NSK transport arrivals",
+  "description": "Telegram bot for NSK Gortrans public transport forecasts",
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
     "dev": "ts-node src/index.ts",
-    "watch": "tsc -w"
+    "watch": "nodemon --exec ts-node src/index.ts"
   },
   "dependencies": {
-    "axios": "^1.6.2",
-    "dotenv": "^16.3.1",
+    "axios": "^1.6.7",
+    "dotenv": "^16.4.1",
     "telegraf": "^4.15.3"
   },
   "devDependencies": {
-    "@types/node": "^20.10.4",
-    "ts-node": "^10.9.1",
+    "@types/node": "^20.11.16",
+    "nodemon": "^3.0.3",
+    "ts-node": "^10.9.2",
     "typescript": "^5.3.3"
   }
 } 

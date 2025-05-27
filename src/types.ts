@@ -47,4 +47,25 @@ interface TransportData {
 export interface ForecastResponse {
   apiVersion: number;
   data: TransportData[];
+}
+
+interface TrassaPoint {
+  id_stop?: string;
+  name_stop?: string;
+  id_platform?: string;
+  order: number;
+  lat: string;
+  lng: string;
+}
+
+interface RouteTrassa {
+  id_route: string;
+  title: string;
+  direction: number;
+  trassa: TrassaPoint[];
+}
+
+export interface TrassaResponse {
+  apiVersion: string;
+  data: RouteTrassa[];
 } 

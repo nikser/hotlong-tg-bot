@@ -2,8 +2,8 @@ import { Telegraf, Context } from 'telegraf';
 import { Update } from 'telegraf/typings/core/types/typegram';
 import axios from 'axios';
 import { config } from './config';
-import { StopsListResponse, RoutesListResponse, ForecastResponse } from './types';
-import { FileCache } from './cache';
+import { StopsListResponse, RoutesListResponse, ForecastResponse, TrassaResponse } from './types';
+import { FileCache, TrassaCache } from './cache';
 
 // Create bot instance
 const bot = new Telegraf(config.TELEGRAM_TOKEN);
@@ -11,10 +11,12 @@ const bot = new Telegraf(config.TELEGRAM_TOKEN);
 // Initialize caches
 const stopsCache = new FileCache<StopsListResponse['data']>('stops.json', 1);
 const routesCache = new FileCache<RoutesListResponse['data']>('routes.json', 1);
+const trassaCache = new TrassaCache(24); // Cache for 24 hours
 
 // Store for all data
 let allStops: StopsListResponse['data'] = [];
 let allRoutes: RoutesListResponse['data'] = [];
+let routeTrassaMap: Record<string, TrassaResponse['data'][0]> = {};
 
 // Function to load all stops
 async function loadAllStops() {
@@ -109,7 +111,7 @@ function formatStopsList(stops: StopsListResponse['data'], showPlatforms: boolea
   let message = `Найдено остановок: ${stops.length}\n\n`;
   
   stops.slice(0, 10).forEach((stop, index) => {
-    message += `${index + 1}. 🚏 ${stop.title} (ID: ${stop.id})\n`;
+    message += `${index + 1}. 🚏 ${stop.title} (# ${stop.id})\n`;
     if (showPlatforms) {
       stop.platforms.forEach((platform, pIndex) => {
         message += `   ${String.fromCharCode(97 + pIndex)}) Платформа ${platform.id}\n`;
@@ -243,7 +245,7 @@ bot.command('stop', async (ctx) => {
   }
 
   try {
-    let fullResponse = `🚏 ${stop.title} (ID: ${stop.id})\n\n`;
+    let fullResponse = `🚏 ${stop.title} (# ${stop.id})\n\n`;
     
     // Get forecast for each platform
     for (const platform of stop.platforms) {
@@ -325,17 +327,60 @@ function getTransportTypeEmoji(type: number): string {
   }
 }
 
+// Function to ensure data is loaded
+async function ensureDataLoaded(): Promise<boolean> {
+  try {
+    if (!allStops || allStops.length === 0) {
+      await loadAllStops();
+    }
+    if (!allRoutes || allRoutes.length === 0) {
+      await loadAllRoutes();
+    }
+    return (allStops && allStops.length > 0 && allRoutes && allRoutes.length > 0);
+  } catch (error) {
+    console.error('Error loading data:', error);
+    return false;
+  }
+}
+
 // Message handler for stop names
 bot.on('text', async (ctx) => {
-  const stopName = ctx.message.text;
+  const text = ctx.message.text;
 
   // Ignore if it looks like a command
-  if (stopName.startsWith('/')) {
+  if (text.startsWith('/')) {
     return;
   }
 
   try {
-    const matchingStops = searchStops(stopName);
+    // Ensure data is loaded first
+    const isDataLoaded = await ensureDataLoaded();
+    if (!isDataLoaded) {
+      await ctx.reply('Ошибка: не удалось загрузить данные. Попробуйте позже или используйте команду /refresh');
+      return;
+    }
+
+    // Check if message starts with # followed by numbers
+    const stopIdMatch = text.match(/^#(\d+)/);
+    if (stopIdMatch) {
+      const stopId = stopIdMatch[1];
+      const stop = allStops.find(s => s.id === stopId);
+      
+      if (!stop) {
+        await ctx.reply(
+          `Остановка #${stopId} не найдена.\n` +
+          'Проверьте номер остановки или воспользуйтесь поиском по названию.'
+        );
+        return;
+      }
+
+      // Show forecast
+      await ctx.reply(await handleStopForecast(stop));
+      return;
+    }
+
+    // Regular stop name search
+    const matchingStops = searchStops(text);
 
     if (matchingStops.length === 0) {
       await ctx.reply(
@@ -344,12 +389,12 @@ bot.on('text', async (ctx) => {
         '- "ленина"\n' +
         '- "площадь маркса"\n' +
         '- "студенческая"\n\n' +
-        'Для точного поиска используйте команду /search <название>'
+        'Или используйте номер остановки: #142'
       );
       return;
     }
 
-    if (matchingStops.length > 10) {
+    if (matchingStops.length > 5) {
       await ctx.reply(
         `Найдено слишком много остановок (${matchingStops.length}). Уточните запрос.\n\n` +
         'Примеры:\n' +
@@ -373,8 +418,7 @@ bot.on('text', async (ctx) => {
 
     // If only one stop found, show its forecast
     const stop = matchingStops[0];
-    await ctx.reply(`Найдена остановка: ${stop.title} (ID: ${stop.id})`);
-    
+
     // Show forecast
     await ctx.reply(await handleStopForecast(stop));
 
@@ -384,41 +428,166 @@ bot.on('text', async (ctx) => {
   }
 });
 
-// Helper function to handle stop forecast
+// Function to get route trassa
+async function getRouteTrassa(routeId: string, direction: number): Promise<TrassaResponse['data'][0] | null> {
+  try {
+    // Check cache first
+    const cachedTrassa = trassaCache.load(routeId, direction);
+    if (cachedTrassa) {
+      return cachedTrassa;
+    }
+
+    const response = await axios.get<TrassaResponse>(
+      `${config.NSKGORTRANS_BASE_URL}/trassa/list/ids/[[${routeId},${direction}]]`,
+      {
+        params: {
+          v: '0.3',
+          key: config.NSKGORTRANS_API_TOKEN,
+          format: 'json'
+        }
+      }
+    );
+
+    if (response.data.data && response.data.data.length > 0) {
+      const trassa = response.data.data[0];
+      trassaCache.save(routeId, direction, trassa);
+      return trassa;
+    }
+    return null;
+  } catch (error) {
+    console.error('Error fetching route trassa:', error);
+    return null;
+  }
+}
+
+// Function to find next stop name in trassa
+function findNextStopName(trassa: TrassaResponse['data'][0], currentPlatformId: string): string {
+  const currentPoint = trassa.trassa.find(p => p.id_platform === currentPlatformId);
+  if (!currentPoint) return '';
+
+  // Find next point with a stop name
+  const nextStop = trassa.trassa
+    .filter(p => p.order > currentPoint.order && p.name_stop)
+    .sort((a, b) => a.order - b.order)[0];
+
+  return nextStop?.name_stop || '';
+}
+
+interface GroupedForecast {
+  emoji: string;
+  routeTitle: string;
+  minutes: number[];
+}
+
+interface PlatformGroup {
+  [nextStop: string]: {
+    [routeId: string]: GroupedForecast;
+  };
+}
+
+// Modify handleStopForecast to include data checks
 async function handleStopForecast(stop: StopsListResponse['data'][0]): Promise<string> {
   try {
-    let response = `🚏 ${stop.title} (ID: ${stop.id})\n\n`;
+    // Ensure data is loaded
+    const isDataLoaded = await ensureDataLoaded();
+    if (!isDataLoaded) {
+      return 'Ошибка: не удалось загрузить данные о маршрутах. Попробуйте позже или используйте команду /refresh';
+    }
+
+    if (!Array.isArray(allRoutes)) {
+      console.error('Error: allRoutes is not an array', { type: typeof allRoutes, value: allRoutes });
+      return 'Ошибка: некорректные данные о маршрутах. Используйте команду /refresh для обновления данных.';
+    }
+
+    let response = `🚏 ${stop.title} (# ${stop.id})\n\n`;
     
     for (const platform of stop.platforms) {
-      const forecastResponse = await axios.get<ForecastResponse>(
-        `${config.FORECAST_ENDPOINT}/${platform.id}`,
-        {
-          params: {
-            v: '0.5',
-            key: config.NSKGORTRANS_API_TOKEN,
-            format: 'json'
+      try {
+        const forecastResponse = await axios.get<ForecastResponse>(
+          `${config.FORECAST_ENDPOINT}/${platform.id}`,
+          {
+            params: {
+              v: '0.5',
+              key: config.NSKGORTRANS_API_TOKEN,
+              format: 'json'
+            }
           }
-        }
-      );
+        );
 
-      if (forecastResponse.data.data && forecastResponse.data.data.length > 0) {
-        response += `Платформа ${platform.id}:\n`;
-        for (const transport of forecastResponse.data.data) {
-          const route = allRoutes.find(r => r.id === transport.id_alias.toString());
-          const emoji = getTransportTypeEmoji(transport.transport_type);
-          for (const marker of transport.marker) {
-            const minutes = Math.round(marker.predict / 60);
-            response += `${emoji} ${route ? route.title : transport.id_alias}: через ${minutes} мин.\n`;
+        if (forecastResponse.data.data && forecastResponse.data.data.length > 0) {
+          // Group by next stop and route
+          const platformGroups: PlatformGroup = {};
+
+          for (const transport of forecastResponse.data.data) {
+            try {
+              const route = allRoutes.find(r => r.id === transport.id_alias.toString());
+              const emoji = getTransportTypeEmoji(transport.transport_type);
+              const trassa = await getRouteTrassa(transport.id_alias.toString(), transport.direction);
+              
+              if (!trassa) continue;
+
+              const nextStop = findNextStopName(trassa, platform.id) || 'Неизвестная остановка';
+              const routeId = transport.id_alias.toString();
+              const routeTitle = route ? route.title : routeId;
+
+              if (!platformGroups[nextStop]) {
+                platformGroups[nextStop] = {};
+              }
+
+              if (!platformGroups[nextStop][routeId]) {
+                platformGroups[nextStop][routeId] = {
+                  emoji,
+                  routeTitle,
+                  minutes: []
+                };
+              }
+
+              transport.marker.forEach(marker => {
+                const minutes = Math.round(marker.predict / 60);
+                platformGroups[nextStop][routeId].minutes.push(minutes);
+              });
+            } catch (transportError) {
+              console.error('Error processing transport:', transportError, { transport });
+              continue;
+            }
+          }
+
+          // Format the grouped data
+          if (Object.keys(platformGroups).length > 0) {
+            const sortedStops = Object.keys(platformGroups).sort();
+            
+            for (const nextStop of sortedStops) {
+              response += ` → ${nextStop} (${platform.id}):\n`;
+              
+              const routes = Object.values(platformGroups[nextStop]);
+              routes.sort((a, b) => {
+                const minA = Math.min(...a.minutes);
+                const minB = Math.min(...b.minutes);
+                return minA - minB;
+              });
+
+              for (const route of routes) {
+                const sortedMinutes = route.minutes.sort((a, b) => a - b);
+                let timeStr = sortedMinutes.length === 1 
+                  ? `${sortedMinutes[0]} мин`
+                  : `${sortedMinutes[0]}-${sortedMinutes[sortedMinutes.length-1]} мин (${sortedMinutes.length})`;
+
+                response += `   ${route.emoji} ${route.routeTitle}: ${timeStr}\n`;
+              }
+              response += '\n';
+            }
           }
         }
-        response += '\n';
+      } catch (platformError) {
+        console.error('Error processing platform:', platformError, { platformId: platform.id });
+        response += ` ⚠️ Ошибка получения данных для платформы ${platform.id}\n\n`;
       }
     }
 
     return response || 'Нет данных о прибытии транспорта на эту остановку.';
   } catch (error) {
     console.error('Error in handleStopForecast:', error);
-    throw error;
+    return 'Произошла ошибка при получении прогноза. Попробуйте позже.';
   }
 }
 
