@@ -81,12 +81,12 @@ export class TrassaCache {
     }
   }
 
-  private getFilePath(routeId: string): string {
-    return path.join(this.cacheDir, `trassa_${routeId}.json`);
+  private getFilePath(routeId: string, direction: number): string {
+    return path.join(this.cacheDir, `trassa_${routeId}_${direction}.json`);
   }
 
   load(routeId: string, direction: number): any | null {
-    const filePath = this.getFilePath(routeId);
+    const filePath = this.getFilePath(routeId, direction);
     try {
       if (!fs.existsSync(filePath)) {
         return null;
@@ -109,7 +109,7 @@ export class TrassaCache {
   }
 
   save(routeId: string, direction: number, data: any): void {
-    const filePath = this.getFilePath(routeId);
+    const filePath = this.getFilePath(routeId, direction);
     try {
       fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
     } catch (error) {
@@ -118,7 +118,7 @@ export class TrassaCache {
   }
 
   clear(routeId: string, direction: number): void {
-    const filePath = this.getFilePath(routeId);
+    const filePath = this.getFilePath(routeId, direction);
     try {
       if (fs.existsSync(filePath)) {
         fs.unlinkSync(filePath);

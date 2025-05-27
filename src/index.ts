@@ -462,7 +462,7 @@ async function getRouteTrassa(routeId: string, direction: number): Promise<Trass
 
 // Function to find next stop name in trassa
 function findNextStopName(trassa: TrassaResponse['data'][0], currentPlatformId: string): string {
-  const currentPoint = trassa.trassa.find(p => p.id_platform === currentPlatformId);
+  const currentPoint = trassa.trassa.find(p => p.id_platform == currentPlatformId);
   if (!currentPoint) return '';
 
   // Find next point with a stop name
