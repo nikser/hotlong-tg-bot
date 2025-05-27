@@ -32,7 +32,7 @@ async function loadAllStops() {
       config.STOPS_LIST_ENDPOINT,
       {
         params: {
-          v: '0.3',
+          v: '0.5',
           key: config.NSKGORTRANS_API_TOKEN,
           format: 'json'
         }
@@ -60,7 +60,7 @@ async function loadAllRoutes() {
       config.ROUTES_LIST_ENDPOINT,
       {
         params: {
-          v: '0.3',
+          v: '0.5',
           key: config.NSKGORTRANS_API_TOKEN,
           format: 'json'
         }
@@ -110,8 +110,8 @@ function formatStopsList(stops: StopsListResponse['data'], showPlatforms: boolea
 
   let message = `Найдено остановок: ${stops.length}\n\n`;
   
-  stops.slice(0, 10).forEach((stop, index) => {
-    message += `${index + 1}. 🚏 ${stop.title} (# ${stop.id})\n`;
+  stops.slice(0, 5).forEach((stop, index) => {
+    message += `${index + 1}. 🚏 ${stop.title} #${stop.id}\n`;
     if (showPlatforms) {
       stop.platforms.forEach((platform, pIndex) => {
         message += `   ${String.fromCharCode(97 + pIndex)}) Платформа ${platform.id}\n`;
@@ -120,8 +120,8 @@ function formatStopsList(stops: StopsListResponse['data'], showPlatforms: boolea
     message += '\n';
   });
 
-  if (stops.length > 10) {
-    message += '\n...и ещё ' + (stops.length - 10) + ' остановок';
+  if (stops.length > 5) {
+    message += '\n...и ещё ' + (stops.length - 5) + ' остановок';
   }
 
   return message;
@@ -245,7 +245,7 @@ bot.command('stop', async (ctx) => {
   }
 
   try {
-    let fullResponse = `🚏 ${stop.title} (# ${stop.id})\n\n`;
+    let fullResponse = `🚏 ${stop.title} #${stop.id}\n\n`;
     
     // Get forecast for each platform
     for (const platform of stop.platforms) {
@@ -441,7 +441,7 @@ async function getRouteTrassa(routeId: string, direction: number): Promise<Trass
       `${config.NSKGORTRANS_BASE_URL}/trassa/list/ids/[[${routeId},${direction}]]`,
       {
         params: {
-          v: '0.3',
+          v: '0.5',
           key: config.NSKGORTRANS_API_TOKEN,
           format: 'json'
         }
@@ -499,7 +499,7 @@ async function handleStopForecast(stop: StopsListResponse['data'][0]): Promise<s
       return 'Ошибка: некорректные данные о маршрутах. Используйте команду /refresh для обновления данных.';
     }
 
-    let response = `🚏 ${stop.title} (# ${stop.id})\n\n`;
+    let response = `🚏 ${stop.title} #${stop.id}\n\n`;
     
     for (const platform of stop.platforms) {
       try {
@@ -568,10 +568,8 @@ async function handleStopForecast(stop: StopsListResponse['data'][0]): Promise<s
 
               for (const route of routes) {
                 const sortedMinutes = route.minutes.sort((a, b) => a - b);
-                let timeStr = sortedMinutes.length === 1 
-                  ? `${sortedMinutes[0]} мин`
-                  : `${sortedMinutes[0]}-${sortedMinutes[sortedMinutes.length-1]} мин (${sortedMinutes.length})`;
-
+                let timeStr = [...new Set(sortedMinutes)].slice(0, 4).map(m => m === 0 ? 'сейчас' : m ).join(', ') + ' мин';
+                timeStr = timeStr.includes('сейчас мин') ? 'сейчас' : timeStr;
                 response += `   ${route.emoji} ${route.routeTitle}: ${timeStr}\n`;
               }
               response += '\n';
