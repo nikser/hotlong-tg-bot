@@ -1,7 +1,7 @@
 interface Platform {
-  id: string;
-  lat: string;
-  lng: string;
+  id: number;
+  lat: number;
+  lng: number;
 }
 
 interface Stop {
@@ -16,11 +16,13 @@ export interface StopsListResponse {
 }
 
 interface Route {
-  id: string;
-  type_transport: string;
+  id: number;
+  transport_type: number;
   title: string;
   name_begin: string;
   name_end: string;
+  begin_stop_id: number;
+  end_stop_id: number;
   fare: number;
 }
 
@@ -50,16 +52,16 @@ export interface ForecastResponse {
 }
 
 interface TrassaPoint {
-  id_stop?: string;
+  id_stop?: number;
   name_stop?: string;
-  id_platform?: string;
+  id_platform?: number;
   order: number;
-  lat: string;
-  lng: string;
+  lat: number;
+  lng: number;
 }
 
 interface RouteTrassa {
-  id_route: string;
+  id_route: number;
   title: string;
   direction: number;
   trassa: TrassaPoint[];
