@@ -13,6 +13,7 @@ npm install
 3. Create a `.env` file in the root directory with your Telegram bot token:
 ```
 TELEGRAM_TOKEN=your_telegram_bot_token_here
+NSKGORTRANS_API_TOKEN=your_nskgortrans_api_token
 ```
 
 4. Build and run the bot:
@@ -43,4 +44,4 @@ npm start
 
 - Node.js 16+
 - npm or yarn
-- A Telegram Bot Token (get it from @BotFather) 
+- A Telegram Bot Token (get it from @BotFather)

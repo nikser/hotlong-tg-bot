@@ -114,7 +114,7 @@ function formatStopsList(stops: StopsListResponse['data'], showPlatforms: boolea
     message += `${index + 1}. 🚏 ${stop.title} #${stop.id}\n`;
     if (showPlatforms) {
       stop.platforms.forEach((platform, pIndex) => {
-        message += `   ${String.fromCharCode(97 + pIndex)}) Платформа ${platform.id}\n`;
+        message += `   ${String.fromCharCode(97 + pIndex)}) Платформа #${platform.id}\n`;
       });
     }
     message += '\n';
@@ -136,7 +136,7 @@ bot.command('start', async (ctx) => {
     '/stop <id> - получить прогноз по ID остановки\n' +
     '/routes - список типов маршрутов\n' +
     '/route <номер> - информация о конкретном маршруте\n' +
-    '/refresh - обновить данные\n' +
+//
     'или просто отправьте название остановки для поиска.'
   );
 });
@@ -152,9 +152,9 @@ bot.command('help', async (ctx) => {
     '   /stop <id> - прогноз по ID остановки\n' +
     '   Пример: /stop 142\n\n' +
     '3. Просмотр маршрутов:\n' +
-    '   /routes - список всех маршрутов\n\n' +
-    '4. Обновление данных:\n' +
-    '   /refresh - обновить список остановок и маршрутов'
+    '   /routes - список всех маршрутов\n\n'
+//    '4. Обновление данных:\n' +
+//    '   /refresh - обновить список остановок и маршрутов'
   );
 });
 
@@ -261,7 +261,7 @@ bot.command('stop', async (ctx) => {
       );
 
       if (forecastResponse.data.data && forecastResponse.data.data.length > 0) {
-        fullResponse += `Платформа ${platform.id}:\n`;
+        fullResponse += `Платформа #${platform.id}:\n`;
         for (const transport of forecastResponse.data.data) {
           const route = allRoutes.find(r => r.id === transport.id_alias.toString());
           const emoji = getTransportTypeEmoji(transport.transport_type);
@@ -396,7 +396,7 @@ bot.on('text', async (ctx) => {
 
     if (matchingStops.length > 5) {
       await ctx.reply(
-        `Найдено слишком много остановок (${matchingStops.length}). Уточните запрос.\n\n` +
+        `Найдено несколько (${matchingStops.length} шт.) остановок. Уточните запрос.\n\n` +
         'Примеры:\n' +
         '- Добавьте больше слов из названия\n' +
         '- Используйте номер дома или название улицы\n' +
@@ -557,7 +557,7 @@ async function handleStopForecast(stop: StopsListResponse['data'][0]): Promise<s
             const sortedStops = Object.keys(platformGroups).sort();
             
             for (const nextStop of sortedStops) {
-              response += ` → ${nextStop} (${platform.id}):\n`;
+              response += ` → ${nextStop} (#${platform.id}):\n`;
               
               const routes = Object.values(platformGroups[nextStop]);
               routes.sort((a, b) => {
@@ -578,7 +578,7 @@ async function handleStopForecast(stop: StopsListResponse['data'][0]): Promise<s
         }
       } catch (platformError) {
         console.error('Error processing platform:', platformError, { platformId: platform.id });
-        response += ` ⚠️ Ошибка получения данных для платформы ${platform.id}\n\n`;
+        response += ` ⚠️ Ошибка получения данных для платформы #${platform.id}\n\n`;
       }
     }
 
