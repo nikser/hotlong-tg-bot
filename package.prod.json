@@ -1,0 +1,14 @@
+{
+  "name": "ngtbot",
+  "version": "1.0.0",
+  "description": "Telegram bot for NSK Gortrans public transport forecasts",
+  "main": "bundle.js",
+  "scripts": {
+    "start": "node bundle.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.1",
+    "telegraf": "^4.15.3",
+    "axios": "^1.6.7"
+  }
+} 

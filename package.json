@@ -5,7 +5,9 @@
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc && tsc-alias",
+    "build:bundle": "node build.js",
     "start": "node dist/index.js",
+    "start:bundle": "node dist/bundle.js",
     "dev": "nodemon --exec ts-node -r tsconfig-paths/register src/index.ts",
     "dev:once": "ts-node -r tsconfig-paths/register src/index.ts",
     "watch": "nodemon --exec ts-node -r tsconfig-paths/register src/index.ts"
@@ -17,6 +19,7 @@
   },
   "devDependencies": {
     "@types/node": "^20.11.16",
+    "esbuild": "^0.25.8",
     "nodemon": "^3.1.10",
     "ts-node": "^10.9.2",
     "tsc-alias": "^1.8.16",
